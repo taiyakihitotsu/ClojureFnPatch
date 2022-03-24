@@ -45,7 +45,7 @@ user=> (aa 1 2 3)
 
 
 ## Status - Done
-* All of tests
+* All of tests were done well
   * which Clojure provide with "maven clean test" are completed.
 * Checked with repl 
   * after "mvn -Plocal -Dmaven.test.skip=true package" -> "java -jar clojure.jar"
