@@ -1,0 +1,630 @@
+From 0f820fe7bc99bd0c9d8d6313f7a6ca4937f9dc57 Mon Sep 17 00:00:00 2001
+From: NN <101902329+taiyakihitotsu@user.noreply.github.com>
+Date: Sat, 19 Mar 2022 12:40:52 +0900
+Subject: [PATCH 1/2] Modified all (fn []) to (fn [] nil). All test is passed.
+ Writing style is still in rough.
+
+---
+ src/clj/clojure/core.clj                   | 18 ++++++--
+ src/clj/clojure/core_print.clj             |  4 +-
+ src/clj/clojure/test.clj                   | 53 ++++++++++++++++++----
+ test/clojure/test_clojure/compilation.clj  |  3 +-
+ test/clojure/test_clojure/multimethods.clj |  1 +
+ 5 files changed, 66 insertions(+), 13 deletions(-)
+
+diff --git a/src/clj/clojure/core.clj b/src/clj/clojure/core.clj
+index 42abb7f0..8018ab28 100644
+--- a/src/clj/clojure/core.clj
++++ b/src/clj/clojure/core.clj
+@@ -1796,17 +1796,22 @@
+          (when-not (and (.hasRoot v#) (instance? clojure.lang.MultiFn (deref v#)))
+            (def ~mm-name
+                 (new clojure.lang.MultiFn ~(name mm-name) ~dispatch-fn ~default ~hierarchy)))))))
+ 
+ (defmacro defmethod
+   "Creates and installs a new method of multimethod associated with dispatch-value. "
+   {:added "1.0"}
+   [multifn dispatch-val & fn-tail]
+-  `(. ~(with-meta multifn {:tag 'clojure.lang.MultiFn}) addMethod ~dispatch-val (fn ~@fn-tail)))
++  (let [than1? #(> (clojure.lang.RT/count %) 1) ;; [] and body
++        addnil #(concat % '(nil)) ;; (fn [arg]) -> (fn [arg] nil)
++        enroll (if (than1? fn-tail)
++                   fn-tail
++                   (addnil fn-tail))]
++    `(. ~(with-meta multifn {:tag 'clojure.lang.MultiFn}) addMethod ~dispatch-val (fn ~@enroll))))
+ 
+ (defn remove-all-methods
+   "Removes all of the methods of multimethod."
+   {:added "1.2"
+    :static true} 
+  [^clojure.lang.MultiFn multifn]
+  (.reset multifn))
+ 
+@@ -4541,18 +4546,25 @@
+   Defines a function.
+ 
+   See https://clojure.org/reference/special_forms#fn for more information"
+   {:added "1.0", :special-form true,
+    :forms '[(fn name? [params* ] exprs*) (fn name? ([params* ] exprs*)+)]}
+   [& sigs]
+     (let [name (if (symbol? (first sigs)) (first sigs) nil)
+           sigs (if name (next sigs) sigs)
+-          sigs (if (vector? (first sigs)) 
+-                 (list sigs) 
++          sigs (if (vector? (first sigs))
++                 ;; (fn [arg] some thing)
++                 ;;           ^^^^ ^^^^^ Ensure there are body parts. 
++                 (if (> 2 (clojure.lang.RT/count sigs))
++                   (throw (IllegalArgumentException. 
++                            (str (seq (concat `(~'fn) sigs)
++                                 " has no body."
++                                 "fn/defn should have it"))))
++                   (list sigs))
+                  (if (seq? (first sigs))
+                    sigs
+                    ;; Assume single arity syntax
+                    (throw (IllegalArgumentException. 
+                             (if (seq sigs)
+                               (str "Parameter declaration " 
+                                    (first sigs)
+                                    " should be a vector")
+diff --git a/src/clj/clojure/core_print.clj b/src/clj/clojure/core_print.clj
+index 18c5101c..7975e625 100644
+--- a/src/clj/clojure/core_print.clj
++++ b/src/clj/clojure/core_print.clj
+@@ -143,18 +143,20 @@
+     :else (.write w (str o))))
+ 
+ (defmethod print-dup Number [o, ^Writer w]
+   (print-ctor o
+               (fn [o w]
+                   (print-dup (str o) w))
+               w))
+ 
++;; (defmethod print-dup clojure.lang.Fn [o, ^Writer w]
++;;   (print-ctor o (fn [o w]) w))
+ (defmethod print-dup clojure.lang.Fn [o, ^Writer w]
+-  (print-ctor o (fn [o w]) w))
++  (print-ctor o (fn [o w] nil) w))
+ 
+ (prefer-method print-dup clojure.lang.IPersistentCollection clojure.lang.Fn)
+ (prefer-method print-dup java.util.Map clojure.lang.Fn)
+ (prefer-method print-dup java.util.Collection clojure.lang.Fn)
+ 
+ (defmethod print-method Boolean [o, ^Writer w]
+   (.write w (str o)))
+ 
+diff --git a/src/clj/clojure/test.clj b/src/clj/clojure/test.clj
+index fc3536d7..f12aa717 100644
+--- a/src/clj/clojure/test.clj
++++ b/src/clj/clojure/test.clj
+@@ -601,65 +601,102 @@
+   [string & body]
+   `(binding [*testing-contexts* (conj *testing-contexts* ~string)]
+      ~@body))
+ 
+ 
+ 
+ ;;; DEFINING TESTS
+ 
++;; TODO
++;; (defn- >0? [v] (> (count %) 0))
++;; (defn- >1? [v] (> (count %) 1))
++;; (defn- >2? [v] (> (count %) 2))
++;; (defn- nil+ [v] (concat '(nil) v))
++;; (defn- +nil [v] (concat v '(nil)))
++;; (defn- rollout [v n]
++;;   (if (> (count v) n)
++;;       v
++;;       (nil+ v)  ))
++
++;; Modified
++;; > with-test
++;; > deftest
++;; > deftest-
++;; > set-test
++
+ (defmacro with-test
+   "Takes any definition form (that returns a Var) as the first argument.
+   Remaining body goes in the :test metadata function for that Var.
+ 
+   When *load-tests* is false, only evaluates the definition, ignoring
+   the tests."
+   {:added "1.1"}
+   [definition & body]
+   (if *load-tests*
+-    `(doto ~definition (alter-meta! assoc :test (fn [] ~@body)))
+-    definition))
+-
++    (let [than0? #(> (count %) 0)
++          addnil #(concat '(nil) %)
++          rollout (if (than0? body)
++                      body
++                      (addnil body))]
++      `(doto ~definition (alter-meta! assoc :test (fn [] ~@rollout)))
++      definition)))
+ 
+ (defmacro deftest
+   "Defines a test function with no arguments.  Test functions may call
+   other tests, so tests may be composed.  If you compose tests, you
+   should also define a function named test-ns-hook; run-tests will
+   call test-ns-hook instead of testing all vars.
+ 
+   Note: Actually, the test body goes in the :test metadata on the var,
+   and the real function (the value of the var) calls test-var on
+   itself.
+ 
+   When *load-tests* is false, deftest is ignored."
+   {:added "1.1"}
+   [name & body]
+   (when *load-tests*
+-    `(def ~(vary-meta name assoc :test `(fn [] ~@body))
+-          (fn [] (test-var (var ~name))))))
++    (let [than0? #(> (count %) 0)
++          addnil #(concat '(nil) %)
++          rollout (if (than0? body)
++                      body
++                      (addnil body))]
++      `(def ~(vary-meta name assoc :test `(fn [] ~@rollout))
++            (fn [] (test-var (var ~name)))))))
++
+ 
+ (defmacro deftest-
+   "Like deftest but creates a private var."
+   {:added "1.1"}
+   [name & body]
+   (when *load-tests*
+-    `(def ~(vary-meta name assoc :test `(fn [] ~@body) :private true)
+-          (fn [] (test-var (var ~name))))))
++    (let [than0? #(> (count %) 0)
++          addnil #(concat '(nil) %)
++          rollout (if (than0? body)
++                      body
++                      (addnil body))]
++     `(def ~(vary-meta name assoc :test `(fn [] ~@rollout) :private true)
++           (fn [] (test-var (var ~name)))))))
+ 
+ 
+ (defmacro set-test
+   "Experimental.
+   Sets :test metadata of the named var to a fn with the given body.
+   The var must already exist.  Does not modify the value of the var.
+ 
+   When *load-tests* is false, set-test is ignored."
+   {:added "1.1"}
+   [name & body]
+   (when *load-tests*
+-    `(alter-meta! (var ~name) assoc :test (fn [] ~@body))))
++    (let [than0? #(> (count %) 0)
++          addnil #(concat '(nil) %)
++          rollout (if (than0? body)
++                      body
++                      (addnil body))]
++     `(alter-meta! (var ~name) assoc :test (fn [] ~@rollout)))))
+ 
+ 
+ 
+ ;;; DEFINING FIXTURES
+ 
+ (defn- add-ns-meta
+   "Adds elements in coll to the current namespace metadata as the
+   value of key."
+diff --git a/test/clojure/test_clojure/compilation.clj b/test/clojure/test_clojure/compilation.clj
+index 999d33f9..54695675 100644
+--- a/test/clojure/test_clojure/compilation.clj
++++ b/test/clojure/test_clojure/compilation.clj
+@@ -425,17 +425,18 @@
+       ;; doesn't actually load clojure.repl, but should
+       ;; eventually call `load` and reset called?.
+       (require 'clojure.repl :reload))
+     (is @called?)))
+ 
+ (deftest clj-1714
+   (testing "CLJ-1714 Classes shouldn't have their static initialisers called simply by type hinting or importing"
+     ;; ClassWithFailingStaticInitialiser will throw if its static initialiser is called
+-    (is (eval '(fn [^compilation.ClassWithFailingStaticInitialiser c])))
++    (is (eval '(fn [^compilation.ClassWithFailingStaticInitialiser c] nil)))
++    ;; (is (eval '(fn [^compilation.ClassWithFailingStaticInitialiser c])))
+     (is (eval '(import (compilation ClassWithFailingStaticInitialiser))))))
+ 
+ (deftest CLJ-2284
+   (testing "CLJ-2284 Can call static methods on interfaces"
+     (is (= 42 (compilation.JDK8InterfaceMethods/staticMethod0 42)))
+     (is (= "test" (compilation.JDK8InterfaceMethods/staticMethod1 "test")))
+     (is (= 1 (if (compilation.JDK8InterfaceMethods/staticMethod2 true) 1 2)))))
+ 
+diff --git a/test/clojure/test_clojure/multimethods.clj b/test/clojure/test_clojure/multimethods.clj
+index 435f0f64..cff6cbea 100644
+--- a/test/clojure/test_clojure/multimethods.clj
++++ b/test/clojure/test_clojure/multimethods.clj
+@@ -153,16 +153,17 @@
+ 
+ #_(defmacro for-all
+   "Better than the actual for-all, if only it worked."
+   [& args]
+   `(reduce
+     #(and %1 %2)
+     (map true? (for ~@args))))
+ 
++
+ (deftest basic-multimethod-test
+   (testing "Check basic dispatch"
+     (defmulti too-simple identity)
+     (defmethod too-simple :a [x] :a)
+     (defmethod too-simple :b [x] :b)
+     (defmethod too-simple :default [x] :default)
+     (is (= :a (too-simple :a)))
+     (is (= :b (too-simple :b)))
+-- 
+2.17.1
+
+
+From 2b21fcf89f2c1ed433a827282bb332ce87c5b2a9 Mon Sep 17 00:00:00 2001
+From: NN <101902329+taiyakihitotsu@user.noreply.github.com>
+Date: Thu, 24 Mar 2022 21:38:49 +0900
+Subject: [PATCH 2/2] (defn name []) to (defn name [] nil). It makes (fn ([])
+ ..) a compile error. ALL TEST IS DONE WELL. rough version.
+
+---
+ src/clj/clojure/core.clj                      | 19 +++++++--
+ src/clj/clojure/core_proxy.clj                |  8 +++-
+ test/clojure/test_clojure/compilation.clj     | 39 ++++++++++++++-----
+ test/clojure/test_clojure/reader.cljc         |  4 +-
+ test/clojure/test_clojure/reducers.clj        |  7 +++-
+ test/clojure/test_clojure/repl.clj            |  8 +++-
+ test/clojure/test_clojure/repl/example.clj    |  7 +++-
+ test/clojure/test_clojure/run_single_test.clj |  5 ++-
+ test/clojure/test_clojure/test_fixtures.clj   |  4 +-
+ 9 files changed, 77 insertions(+), 24 deletions(-)
+
+diff --git a/src/clj/clojure/core.clj b/src/clj/clojure/core.clj
+index 8018ab28..d2760b8c 100644
+--- a/src/clj/clojure/core.clj
++++ b/src/clj/clojure/core.clj
+@@ -4546,24 +4546,23 @@
+   Defines a function.
+ 
+   See https://clojure.org/reference/special_forms#fn for more information"
+   {:added "1.0", :special-form true,
+    :forms '[(fn name? [params* ] exprs*) (fn name? ([params* ] exprs*)+)]}
+   [& sigs]
+     (let [name (if (symbol? (first sigs)) (first sigs) nil)
+           sigs (if name (next sigs) sigs)
++          empbodyerr " has no body. fn/defn must have them."
+           sigs (if (vector? (first sigs))
+                  ;; (fn [arg] some thing)
+                  ;;           ^^^^ ^^^^^ Ensure there are body parts. 
+                  (if (> 2 (clojure.lang.RT/count sigs))
+                    (throw (IllegalArgumentException. 
+-                            (str (seq (concat `(~'fn) sigs)
+-                                 " has no body."
+-                                 "fn/defn should have it"))))
++                            (str "(fn" sigs ")" empbodyerr)))
+                    (list sigs))
+                  (if (seq? (first sigs))
+                    sigs
+                    ;; Assume single arity syntax
+                    (throw (IllegalArgumentException. 
+                             (if (seq sigs)
+                               (str "Parameter declaration " 
+                                    (first sigs)
+@@ -4581,17 +4580,28 @@
+                                     (if (seq? (first sigs))
+                                       (str "Parameter declaration " params
+                                            " should be a vector")
+                                       (str "Invalid signature " sig
+                                            " should be a list")))))
+                        conds (when (and (next body) (map? (first body))) 
+                                            (first body))
+                        body (if conds (next body) body)
++                       
+                        conds (or conds (meta params))
++
++                       
++                       ;; TODO ;;
++                       _ (when (> 1 (clojure.lang.RT/count body))
++                           (throw
++                            (IllegalArgumentException.
++                             (str sig empbodyerr))))
++                       ;;;;;;;;;;
++
++                       
+                        pre (:pre conds)
+                        post (:post conds)                       
+                        body (if post
+                               `((let [~'% ~(if (< 1 (count body)) 
+                                             `(do ~@body) 
+                                             (first body))]
+                                  ~@(map (fn* [c] `(assert ~c)) post)
+                                  ~'%))
+@@ -4742,17 +4752,18 @@
+                                      (let [~bind (first ~gxs)]
+                                        ~(do-mod mod-pairs)))))))))))]
+     `(let [iter# ~(emit-bind (to-groups seq-exprs))]
+         (iter# ~(second seq-exprs)))))
+ 
+ (defmacro comment
+   "Ignores body, yields nil"
+   {:added "1.0"}
+-  [& body])
++  ;; [& body] ;; TODO
++  [& body] nil)
+ 
+ (defmacro with-out-str
+   "Evaluates exprs in a context in which *out* is bound to a fresh
+   StringWriter.  Returns the string created by any nested printing
+   calls."
+   {:added "1.0"}
+   [& body]
+   `(let [s# (new java.io.StringWriter)]
+diff --git a/src/clj/clojure/core_proxy.clj b/src/clj/clojure/core_proxy.clj
+index 46f7b4b8..b0428471 100644
+--- a/src/clj/clojure/core_proxy.clj
++++ b/src/clj/clojure/core_proxy.clj
+@@ -372,17 +372,23 @@
+         (init-proxy p#
+          ~(loop [fmap {} fs fs]
+             (if fs
+               (let [[sym & meths] (first fs)
+                     meths (if (vector? (first meths))
+                             (list meths)
+                             meths)
+                     meths (map (fn [[params & body]]
+-                                   (cons (apply vector 'this params) body))
++
++                                 ;; TODO
++                                 (cons (apply vector 'this params)
++                                       (cons 'nil body)))
++
++                               
++                                 ;;  (cons (apply vector 'this params) body))
+                                meths)]
+                 (if-not (contains? fmap (name sym))		  
+                 (recur (assoc fmap (name sym) (cons `fn meths)) (next fs))
+ 		           (throw (IllegalArgumentException.
+ 			              (str "Method '" (name sym) "' redefined")))))
+               fmap)))
+         p#)))
+ 
+diff --git a/test/clojure/test_clojure/compilation.clj b/test/clojure/test_clojure/compilation.clj
+index 54695675..3f51e32b 100644
+--- a/test/clojure/test_clojure/compilation.clj
++++ b/test/clojure/test_clojure/compilation.clj
+@@ -126,66 +126,85 @@
+                 (if (== y 0)
+                   x
+                   (recur y ^Long(rem x y)))))]
+       (is (= 4 (gcd 8 100))))))
+ 
+ ;; ensure proper use of hints / type decls
+ 
+ (defn hinted
+-  (^String [])
+-  (^Integer [a])
+-  (^java.util.List [a & args]))
++  (^String [] nil)
++  (^Integer [a] nil)
++  (^java.util.List [a & args] nil))
++;; TODO
++;; (defn hinted
++;;   (^String [] )
++;;   (^Integer [a] )
++;;   (^java.util.List [a & args] ))
+ 
+ ;; fn names need to be fully-qualified because should-not-reflect evals its arg in a throwaway namespace
+ 
+ (deftest recognize-hinted-arg-vector
+   (should-not-reflect #(.substring (clojure.test-clojure.compilation/hinted) 0))
+   (should-not-reflect #(.floatValue (clojure.test-clojure.compilation/hinted "arg")))
+   (should-not-reflect #(.size (clojure.test-clojure.compilation/hinted :many :rest :args :here))))
+ 
+ (deftest CLJ-1232-qualify-hints
+   (let [arglists (-> #'clojure.test-clojure.compilation/hinted meta :arglists)]
+     (is (= 'java.lang.String (-> arglists first meta :tag)))
+     (is (= 'java.lang.Integer (-> arglists second meta :tag)))))
+ 
+ (deftest CLJ-1232-return-type-not-imported
+   (is (thrown-with-cause-msg? Compiler$CompilerException #"Unable to resolve classname: Closeable"
+-                              (eval '(defn a ^Closeable []))))
++                              (eval '(defn a ^Closeable [] nil))))
+   (is (thrown-with-cause-msg? Compiler$CompilerException #"Unable to resolve classname: Closeable"
+-                              (eval '(defn a (^Closeable []))))))
+-
+-(defn ^String hinting-conflict ^Integer [])
++                              (eval '(defn a (^Closeable [] nil))))))
++;; TODO
++;; (deftest CLJ-1232-return-type-not-imported
++;;   (is (thrown-with-cause-msg? Compiler$CompilerException #"Unable to resolve classname: Closeable"
++;;                               (eval '(defn a ^Closeable []))))
++;;   (is (thrown-with-cause-msg? Compiler$CompilerException #"Unable to resolve classname: Closeable"
++;;                               (eval '(defn a (^Closeable []))))))
++
++(defn ^String hinting-conflict ^Integer [] nil)
++;; TODO
++;;(defn ^String hinting-conflict ^Integer [])
+ 
+ (deftest calls-use-arg-vector-hint
+   (should-not-reflect #(.floatValue (clojure.test-clojure.compilation/hinting-conflict)))
+   (should-print-err-message #"(?s)Reflection warning.*"
+     #(.substring (clojure.test-clojure.compilation/hinting-conflict) 0)))
+ 
+ (deftest deref-uses-var-tag
+   (should-not-reflect #(.substring clojure.test-clojure.compilation/hinting-conflict 0))
+   (should-print-err-message #"(?s)Reflection warning.*"
+     #(.floatValue clojure.test-clojure.compilation/hinting-conflict)))
+ 
+-(defn ^String legacy-hinting [])
++(defn ^String legacy-hinting [] nil)
++;; TODO
++;;(defn ^String legacy-hinting [])
+ 
+ (deftest legacy-call-hint
+   (should-not-reflect #(.substring (clojure.test-clojure.compilation/legacy-hinting) 0)))
+ 
+ (defprotocol HintedProtocol
+   (hintedp ^String [a]
+            ^Integer [a b]))
+ 
+ (deftest hinted-protocol-arg-vector
+   (should-not-reflect #(.substring (clojure.test-clojure.compilation/hintedp "") 0))
+   (should-not-reflect #(.floatValue (clojure.test-clojure.compilation/hintedp :a :b))))
+ 
+ (defn primfn
+-  (^long [])
+-  (^double [a]))
++  (^long [] nil)
++  (^double [a] nil))
++;; TODO
++;; (defn primfn
++;;   (^long [])
++;;   (^double [a]))
+ 
+ (deftest primitive-return-decl
+   (should-not-reflect #(loop [k 5] (recur (clojure.test-clojure.compilation/primfn))))
+   (should-not-reflect #(loop [k 5.0] (recur (clojure.test-clojure.compilation/primfn 0))))
+ 
+   (should-print-err-message #"(?s).*k is not matching primitive.*"
+     #(loop [k (clojure.test-clojure.compilation/primfn)] (recur :foo))))
+ 
+diff --git a/test/clojure/test_clojure/reader.cljc b/test/clojure/test_clojure/reader.cljc
+index 522a2792..4b4a9eb1 100644
+--- a/test/clojure/test_clojure/reader.cljc
++++ b/test/clojure/test_clojure/reader.cljc
+@@ -772,11 +772,13 @@
+ (deftest t-Explicit-line-column-numbers
+   (is (= {:line 42 :column 99}
+          (-> "^{:line 42 :column 99} (1 2)" read-string meta (select-keys [:line :column]))))
+ 
+   (are [l c s] (= {:line l :column c} (-> s str->lnpr read meta (select-keys [:line :column])))
+     42 99 "^{:line 42 :column 99} (1 2)"
+     1 99 "^{:column 99} (1 2)")
+ 
+-  (eval (-> "^{:line 42 :column 99} (defn explicit-line-numbering [])" str->lnpr read))
++  (eval (-> "^{:line 42 :column 99} (defn explicit-line-numbering [] nil)" str->lnpr read))
++  ;; TODO
++  ;; (eval (-> "^{:line 42 :column 99} (defn explicit-line-numbering [])" str->lnpr read))
+   (is (= {:line 42 :column 99}
+          (-> 'explicit-line-numbering resolve meta (select-keys [:line :column])))))
+diff --git a/test/clojure/test_clojure/reducers.clj b/test/clojure/test_clojure/reducers.clj
+index a884c851..64b1d5a3 100644
+--- a/test/clojure/test_clojure/reducers.clj
++++ b/test/clojure/test_clojure/reducers.clj
+@@ -79,17 +79,20 @@
+       (reduced-at-probe m probe)))
+   [^{:tag `gen-num} probe ^{:tag `gen-num} to-end]
+   (assert (= :foo %)))
+ 
+ (deftest test-fold-runtime-exception
+   (is (thrown? IndexOutOfBoundsException
+                (let [test-map-count 1234
+                      k-fail (rand-int test-map-count)]
+-                 (r/fold (fn ([])
+-                           ([ret [k v]])
++                 (r/fold (fn ([] nil)
++                           ([ret [k v]] nil)
++                           ;; TODO
++                 ;; (r/fold (fn ([])
++                 ;;           ([ret [k v]])
+                            ([ret k v] (when (= k k-fail)
+                                         (throw (IndexOutOfBoundsException.)))))
+                          (zipmap (range test-map-count) (repeat :dummy)))))))
+ 
+ (deftest test-closed-over-clearing
+   ;; this will throw OutOfMemory without proper reference clearing
+   (is (number? (reduce + 0 (r/map identity (range 1e8))))))
+diff --git a/test/clojure/test_clojure/repl.clj b/test/clojure/test_clojure/repl.clj
+index c7a0c41b..919ee3fe 100644
+--- a/test/clojure/test_clojure/repl.clj
++++ b/test/clojure/test_clojure/repl.clj
+@@ -8,19 +8,23 @@
+ (deftest test-doc
+   (testing "with namespaces"
+     (is (= "clojure.pprint"
+            (second (str/split-lines (with-out-str (doc clojure.pprint)))))))
+   (testing "with special cases"
+     (is (= (with-out-str (doc catch)) (with-out-str (doc try))))))
+ 
+ (deftest test-source
+-  (is (= "(defn foo [])" (source-fn 'clojure.test-clojure.repl.example/foo)))
+-  (is (= (platform-newlines "(defn foo [])\n") (with-out-str (source clojure.test-clojure.repl.example/foo))))
++  (is (= "(defn foo [] nil)" (source-fn 'clojure.test-clojure.repl.example/foo)))
++  (is (= (platform-newlines "(defn foo [] nil)\n") (with-out-str (source clojure.test-clojure.repl.example/foo))))
+   (is (nil? (source-fn 'non-existent-fn))))
++;; (deftest test-source
++;;   (is (= "(defn foo [])" (source-fn 'clojure.test-clojure.repl.example/foo)))
++;;   (is (= (platform-newlines "(defn foo [])\n") (with-out-str (source clojure.test-clojure.repl.example/foo))))
++;;   (is (nil? (source-fn 'non-existent-fn))))
+ 
+ (deftest test-source-read-eval-unknown
+   (is (thrown? IllegalStateException (binding [*read-eval* :unknown] (source reduce)))))
+ 
+ (deftest test-source-read-eval-false
+   (is (binding [*read-eval* false] (with-out-str (source reduce)))))
+ 
+ (deftest test-dir
+diff --git a/test/clojure/test_clojure/repl/example.clj b/test/clojure/test_clojure/repl/example.clj
+index 3a5238e7..43b5f890 100644
+--- a/test/clojure/test_clojure/repl/example.clj
++++ b/test/clojure/test_clojure/repl/example.clj
+@@ -1,5 +1,8 @@
+ (ns clojure.test-clojure.repl.example)
+ 
+ ;; sample namespace for repl tests, don't add anything here
+-(defn foo [])
+-(defn bar [])
++(defn foo [] nil)
++(defn bar [] nil)
++;; TODO
++;; (defn foo [])
++;; (defn bar [])
+diff --git a/test/clojure/test_clojure/run_single_test.clj b/test/clojure/test_clojure/run_single_test.clj
+index abf1084c..46835ca6 100644
+--- a/test/clojure/test_clojure/run_single_test.clj
++++ b/test/clojure/test_clojure/run_single_test.clj
+@@ -7,17 +7,20 @@
+ ;   You must not remove this notice, or any other, from this software.
+ 
+ (ns clojure.test-clojure.run-single-test
+   (:require [clojure.test :refer [is deftest run-test run-tests]]
+             [clojure.test-helper :refer [with-err-string-writer]]
+             [clojure.test-clojure.test-fixtures :as tf]))
+ 
+ (defn not-a-test
+-  [])
++  [] nil)
++;; TODO
++;; (defn not-a-test
++;;   [])
+ 
+ (defmacro should-print-to-err
+   [re & body]
+   `(is (re-find ~re (with-err-string-writer ~@body))))
+ 
+ (deftest reports-missing-var
+   (should-print-to-err #"^Unable to resolve .*/function-missing to a test function.*"
+     (let [result (eval `(run-test function-missing))]
+diff --git a/test/clojure/test_clojure/test_fixtures.clj b/test/clojure/test_clojure/test_fixtures.clj
+index a41b2943..786e886c 100644
+--- a/test/clojure/test_clojure/test_fixtures.clj
++++ b/test/clojure/test_clojure/test_fixtures.clj
+@@ -60,14 +60,16 @@
+   ;; test-vars below from the same fixtures running prior to this test
+   (let [side-effects-so-far @side-effects
+         reported (atom [])]
+     (binding [report (fn [m] (swap! reported conj (:type m)))]
+       (test-vars [#'can-use-each-fixtures]))
+     (is (= [:begin-test-var :pass :pass :end-test-var] @reported))
+     (is (= (inc side-effects-so-far) @side-effects))))
+ 
+-(defn should-not-trigger-fixtures [])
++(defn should-not-trigger-fixtures [] nil)
++;; TODO
++;;(defn should-not-trigger-fixtures [])
+ 
+ (deftest a-var-lacking-test-meta-should-not-trigger-fixtures
+   (let [side-effects-so-far @side-effects]
+     (test-vars [#'should-not-trigger-fixtures])
+     (is (= side-effects-so-far @side-effects))))
+-- 
+2.17.1
+
