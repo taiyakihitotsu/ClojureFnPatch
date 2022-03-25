@@ -18,6 +18,8 @@ and force you to write a body or `nil`.
 
 
 ## Example
+
+with this:
 ```
 user=> (defn foo [bar])
 Syntax error (IllegalArgumentException) compiling at (REPL:1:1).
@@ -27,6 +29,13 @@ user=> (defn foo [bar] (inc 1))
 #'user/foo
 ```
 
+without (it's normal):
+```
+user=> (defn foo [bar]) 
+#'user/foo
+```
+
+with:
 ```
 user=> `(fn [a] ~@(filter even? [1 3 5]))
 (clojure.core/fn [user/a])
@@ -42,20 +51,38 @@ user=> (aa 1 2 3)
 #object[user$eval149$fn__150 0x32c8e539 "user$eval149$fn__150@32c8e539"]
 ```
 
+without:
+```
+user=> `(fn [a] ~@(filter even? [1 3 5])) 
+(clojure.core/fn [user/a])
+
+user=> (defmacro aa [x y z] `(fn [] ~@(filter even? [x y z])))
+#'user/aa
+
+user=> (aa 1 3 5)
+#object[user$eval148$fn__149 0x70efb718 "user$eval148$fn__149@70efb718"]
+
+user=> (aa 1 2 3)
+#object[user$eval152$fn__153 0x4e70a728 "user$eval152$fn__153@4e70a728"]
+
+```
+
 
 
 ## Status - Done
-* All of tests were done well
-  * which Clojure provides with "maven clean test".
+* Patch tests
+  * with `git clone https://github.com/clojure/clojure.git` -> `patch -1 < defnfix-patch-proto.patch`
+* All of tests
+  * which Clojure provide with `maven clean test`
 * Checked with repl 
-  * after "mvn -Plocal -Dmaven.test.skip=true package" -> "java -jar clojure.jar"
+  * with `mvn -Plocal -Dmaven.test.skip=true package` -> `java -jar clojure.jar`
 
 
 
 ## Status - Not yet
 * Refactoring
 * Improving error messages
-* Adding tests more
+* Adding tests suitable for this
 * For ClojureScript
 
 
