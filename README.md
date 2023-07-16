@@ -69,21 +69,24 @@ user=> (aa 1 2 3)
 
 
 
-## Status - Done
-* Patch tests
-  * with `git clone https://github.com/clojure/clojure.git` -> `patch -1 < defnfix-patch-proto.patch`
-* All of tests
-  * which Clojure provide with `maven clean test`
-* Checked with repl 
-  * with `mvn -Plocal -Dmaven.test.skip=true package` -> `java -jar clojure.jar`
+## How to use
+* Patching
+  1. `git clone https://github.com/taiyakihitotsu/ClojureFnPatch`
+  2. `cd ./ClojureFnPatch`
+  3. `git clone https://github.com/clojure/clojure.git`
+  4. `patch -d clojure -p1 < defnfix-patch-proto.patch`
+* Tests 
+  1. `cd ./clojure`
+  2. `mvn clean test`
+* Repl
+  1. `mvn -Plocal -Dmaven.test.skip=true package`
+  2. `java -jar clojure.jar`
 
 
 
-## Status - Not yet
-* Refactoring
-* Improving error messages
-* Adding tests suitable for this
-* For ClojureScript
+## Confirmed Version
+Clojure - 1.12.0-master-SNAPSHOT
+
 
 
 
