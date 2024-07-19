@@ -1,4 +1,4 @@
-## Abstruct
+## Brief
 This patch block to compile these functions below:
 
 `(fn [a r g s])`
@@ -20,7 +20,7 @@ and force you to write a body or `nil`.
 ## Example
 
 with this:
-```
+```clojure
 user=> (defn foo [bar])
 Syntax error (IllegalArgumentException) compiling at (REPL:1:1).
 ([bar]) has no body. fn/defn must have them.
@@ -30,13 +30,13 @@ user=> (defn foo [bar] (inc 1))
 ```
 
 without (it's normal):
-```
+```clojure
 user=> (defn foo [bar]) 
 #'user/foo
 ```
 
 with:
-```
+```clojure
 user=> `(fn [a] ~@(filter even? [1 3 5]))
 (clojure.core/fn [user/a])
 
@@ -52,7 +52,7 @@ user=> (aa 1 2 3)
 ```
 
 without:
-```
+```clojure
 user=> `(fn [a] ~@(filter even? [1 3 5])) 
 (clojure.core/fn [user/a])
 
@@ -85,16 +85,15 @@ user=> (aa 1 2 3)
 
 
 ## Confirmed Version
-Clojure - 1.12.0-master-SNAPSHOT
-
+- 1.12.0-master-SNAPSHOT
+- 1.13.1-r1 [gentoo](https://gitweb.gentoo.org/repo/gentoo.git/tree/dev-lang/clojure/clojure-1.11.3-r1.ebuild)
 
 
 
 ## Author
-Taiyaki
+Taiyakihitotsu
 
 
 
 ## License
 EPL
-(I mean the same of Clojure using)
