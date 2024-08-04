@@ -85,9 +85,9 @@ user=> (aa 1 2 3)
 
 
 ## Confirmed Version
+- 1.12.0-rc [gentoo](https://github.com/taiyakihitotsu/clojure-patched)
 - 1.12.0-master-SNAPSHOT
-- 1.13.1-r1 [gentoo](https://gitweb.gentoo.org/repo/gentoo.git/tree/dev-lang/clojure/clojure-1.11.3-r1.ebuild) -> [ebuild](https://github.com/taiyakihitotsu/ClojureFnPatch)
-
+- 1.13.1 [gentoo](https://github.com/taiyakihitotsu/clojure-patched)
 
 
 ## Author
